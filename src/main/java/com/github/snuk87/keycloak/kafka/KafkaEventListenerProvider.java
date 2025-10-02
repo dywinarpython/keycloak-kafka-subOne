@@ -3,11 +3,13 @@ package com.github.snuk87.keycloak.kafka;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import com.subOne.kecyloak_dto.UserInfo;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -19,43 +21,55 @@ import org.keycloak.events.admin.AdminEvent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.RealmModel;
+import org.keycloak.models.UserModel;
 
 public class KafkaEventListenerProvider implements EventListenerProvider {
 
 	private static final Logger LOG = Logger.getLogger(KafkaEventListenerProvider.class);
 
-	private String topicEvents;
+	private final String topicEvents;
 
-	private List<EventType> events;
+	private final String topicCreateUser;
+	private final String topicVerifyEmail;
 
-	private String topicAdminEvents;
+	private final KeycloakSession keycloakSession;
 
-	private Producer<String, String> producer;
+	private final List<EventType> events;
 
-	private ObjectMapper mapper;
+	private final String topicAdminEvents;
+
+	private final Producer<String, String> producer;
+
+	private final ObjectMapper mapper;
 
 	public KafkaEventListenerProvider(String bootstrapServers, String clientId, String topicEvents, String[] events,
-			String topicAdminEvents, Map<String, Object> kafkaProducerProperties, KafkaProducerFactory factory) {
+			String topicAdminEvents, Map<String, Object> kafkaProducerProperties, KafkaProducerFactory factory, KeycloakSession session, String topicCreateUser,
+	String topicVerifyEmail) {
 		this.topicEvents = topicEvents;
 		this.events = new ArrayList<>();
 		this.topicAdminEvents = topicAdminEvents;
-
-		for (String event : events) {
-			try {
-				EventType eventType = EventType.valueOf(event.toUpperCase());
-				this.events.add(eventType);
-			} catch (IllegalArgumentException e) {
-				LOG.debug("Ignoring event >" + event + "<. Event does not exist.");
+		this.keycloakSession = session;
+		this.topicCreateUser = topicCreateUser;
+		this.topicVerifyEmail = topicVerifyEmail;
+		if(events != null) {
+			for (String event : events) {
+				try {
+					EventType eventType = EventType.valueOf(event.toUpperCase());
+					this.events.add(eventType);
+				} catch (IllegalArgumentException e) {
+					LOG.debug("Ignoring event >" + event + "<. Event does not exist.");
+				}
 			}
 		}
-
 		producer = factory.createProducer(clientId, bootstrapServers, kafkaProducerProperties);
 		mapper = new ObjectMapper();
 	}
 
 	private void produceEvent(String eventAsString, String topic)
 			throws InterruptedException, ExecutionException, TimeoutException {
-		LOG.debug("Produce to topic: " + topicEvents + " ...");
+		LOG.debug("Produce to topic: " + topic + " ...");
 		ProducerRecord<String, String> record = new ProducerRecord<>(topic, eventAsString);
 		Future<RecordMetadata> metaData = producer.send(record);
 		RecordMetadata recordMetadata = metaData.get(30, TimeUnit.SECONDS);
@@ -64,18 +78,40 @@ public class KafkaEventListenerProvider implements EventListenerProvider {
 
 	@Override
 	public void onEvent(Event event) {
-		if (events.contains(event.getType())) {
-			try {
-				produceEvent(mapper.writeValueAsString(event), topicEvents);
-			} catch (JsonProcessingException | ExecutionException | TimeoutException e) {
-				LOG.error(e.getMessage(), e);
-			} catch (InterruptedException e) {
-				LOG.error(e.getMessage(), e);
-				Thread.currentThread().interrupt();
+		try {
+			if (event.getType().equals(EventType.IDENTITY_PROVIDER_FIRST_LOGIN)) {
+				RealmModel realm = keycloakSession.realms().getRealm(event.getRealmId());
+				UserModel user = keycloakSession.users().getUserById(realm, event.getUserId());
+				UserInfo userInfo = new UserInfo(user.getFirstName(), user.getLastName(), UUID.fromString(event.getUserId()), user.getEmail(), true);
+				produceEvent(mapper.writeValueAsString(userInfo), topicCreateUser);
+			} else if (event.getType().equals(EventType.REGISTER)) {
+				Map<String, String> details = event.getDetails();
+				String firstName = details.get("first_name");
+				String lastName = details.get("last_name");
+				String email = details.get("email");
+				String userId = event.getUserId();
+				UserInfo userInfo = new UserInfo(
+						firstName,
+						lastName,
+						UUID.fromString(userId),
+						email,
+						false
+				);
+				produceEvent(mapper.writeValueAsString(userInfo), topicCreateUser);
+			} else if (event.getType().equals(EventType.VERIFY_EMAIL)) {
+				Map<String, String> details = event.getDetails();
+				String email = details.get("email");
+				produceEvent(mapper.writeValueAsString(email), topicVerifyEmail);
+			} else if(events.contains(event.getType())){
+				produceEvent(mapper.writeValueAsString(event), topicCreateUser);
 			}
+		} catch (JsonProcessingException | ExecutionException | TimeoutException e) {
+			LOG.error(e.getMessage(), e);
+		} catch (InterruptedException e) {
+			LOG.error(e.getMessage(), e);
+			Thread.currentThread().interrupt();
 		}
 	}
-
 	@Override
 	public void onEvent(AdminEvent event, boolean includeRepresentation) {
 		if (topicAdminEvents != null) {

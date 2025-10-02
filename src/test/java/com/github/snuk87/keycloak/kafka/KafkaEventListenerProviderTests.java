@@ -12,6 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.keycloak.events.Event;
 import org.keycloak.events.EventType;
 import org.keycloak.events.admin.AdminEvent;
+import org.keycloak.models.KeycloakSession;
+import org.keycloak.models.UserModel;
+import org.keycloak.models.UserProvider;
+
+import static org.mockito.Mockito.*;
 
 class KafkaEventListenerProviderTests {
 
@@ -20,18 +25,38 @@ class KafkaEventListenerProviderTests {
 
 	@BeforeEach
 	void setUp() throws Exception {
+
+		KeycloakSession mockSession = mock(KeycloakSession.class);
+		UserProvider mockUsers = mock(UserProvider.class);
+		UserModel mockUser = mock(UserModel.class);
+
+		when(mockSession.users()).thenReturn(mockUsers);
+		when(mockUsers.getUserById(any(), anyString())).thenReturn(mockUser);
+		when(mockUser.getFirstName()).thenReturn("John");
+		when(mockUser.getLastName()).thenReturn("Doe");
+		when(mockUser.getEmail()).thenReturn("john.doe@example.com");
+		when(mockUser.isEmailVerified()).thenReturn(true);
+		when(mockUser.getId()).thenReturn("user-id-123");
+
 		factory = new KafkaMockProducerFactory();
 		listener = new KafkaEventListenerProvider("", "", "", new String[] { "REGISTER" }, "admin-events", Map.of(),
-				factory);
+				factory, mockSession, "create_user", "verify_email");
 	}
 
 	@Test
 	void shouldProduceEventWhenTypeIsDefined() throws Exception {
-		Event event = new Event();
-		event.setType(EventType.REGISTER);
+		Event mockEvent = mock(Event.class);
+		when(mockEvent.getType()).thenReturn(EventType.REGISTER);
+		when(mockEvent.getUserId()).thenReturn("935edd54-9d81-48fb-b114-8c5144367630");
+		when(mockEvent.getDetails()).thenReturn(Map.of(
+				"first_name", "John",
+				"last_name", "Doe",
+				"email", "john.doe@example.com"
+		));
+
 		MockProducer<?, ?> producer = getProducerUsingReflection();
 
-		listener.onEvent(event);
+		listener.onEvent(mockEvent);
 
 		assertEquals(1, producer.history().size());
 	}
@@ -59,10 +84,11 @@ class KafkaEventListenerProviderTests {
 
 	@Test
 	void shouldDoNothingWhenTopicAdminEventsIsNull() throws Exception {
-		listener = new KafkaEventListenerProvider("", "", "", new String[] { "REGISTER" }, null, Map.of(), factory);
+		Field field = listener.getClass().getDeclaredField("topicAdminEvents");
+		field.setAccessible(true);
+		field.set(listener, null);
 		AdminEvent event = new AdminEvent();
 		MockProducer<?, ?> producer = getProducerUsingReflection();
-
 		listener.onEvent(event, false);
 
 		assertTrue(producer.history().isEmpty());

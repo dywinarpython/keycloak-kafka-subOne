@@ -17,7 +17,10 @@ class KafkaProducerConfigTests {
 		System.setProperty("keycloak.foo", "bar");
 
 		Map<String, Object> config = KafkaProducerConfig.init(new SystemPropertiesConfigProvider().scope());
-		Map<String, Object> expected = Map.of("retry.backoff.ms", "1000", "max.block.ms", "5000");
+		Map<String, Object> expected = Map.of(
+				"retry.backoff.ms", "1000",
+				"max.block.ms", "5000"
+		);
 
 		assertEquals(expected, config);
 	}

@@ -17,6 +17,8 @@ public class KafkaEventListenerProviderFactory implements EventListenerProviderF
 	private KafkaEventListenerProvider instance;
 
 	private String bootstrapServers;
+	private String topicCreateUser;
+	private String topicVerifyEmail;
 	private String topicEvents;
 	private String topicAdminEvents;
 	private String clientId;
@@ -27,9 +29,8 @@ public class KafkaEventListenerProviderFactory implements EventListenerProviderF
 	public EventListenerProvider create(KeycloakSession session) {
 		if (instance == null) {
 			instance = new KafkaEventListenerProvider(bootstrapServers, clientId, topicEvents, events, topicAdminEvents,
-					kafkaProducerProperties, new KafkaStandardProducerFactory());
+					kafkaProducerProperties, new KafkaStandardProducerFactory(), session, topicCreateUser, topicVerifyEmail);
 		}
-
 		return instance;
 	}
 
@@ -42,33 +43,47 @@ public class KafkaEventListenerProviderFactory implements EventListenerProviderF
 	public void init(Scope config) {
 		LOG.info("Init kafka module ...");
 		topicEvents = config.get("topicEvents", System.getenv("KAFKA_TOPIC"));
+
+		topicCreateUser = System.getenv("KAFKA_CREATE_USER_TOPIC");
+
+		topicVerifyEmail = System.getenv("KAFKA_VERIFY_EMAIL_TOPIC");
+
 		clientId = config.get("clientId", System.getenv("KAFKA_CLIENT_ID"));
 		bootstrapServers = config.get("bootstrapServers", System.getenv("KAFKA_BOOTSTRAP_SERVERS"));
 		topicAdminEvents = config.get("topicAdminEvents", System.getenv("KAFKA_ADMIN_TOPIC"));
 
+
 		String eventsString = config.get("events", System.getenv("KAFKA_EVENTS"));
+
+		if(topicCreateUser == null){
+			throw new NullPointerException("topic create_user must be not null.");
+		}
+		LOG.info("CREATE_USER_TOPIC: " + topicCreateUser);
+
+		if(topicVerifyEmail == null){
+			throw new NullPointerException("topic verify_email must be not null.");
+		}
+		LOG.info("VERIFY_EMAIL_TOPIC: " + topicVerifyEmail);
 
 		if (eventsString != null) {
 			events = eventsString.split(",");
 		}
-
+		LOG.info("EVENTS: " +eventsString);
 		if (topicEvents == null) {
-			throw new NullPointerException("topic must not be null.");
+			LOG.warn("Additional topics will not be transmitted, the default topics will be used: VERIFY_EMAIL_TOPIC, CREATE_USER_TOPIC");
+		} else {
+			LOG.info("TOPIC_EVENTS: " + topicEvents);
 		}
-
 		if (clientId == null) {
 			throw new NullPointerException("clientId must not be null.");
 		}
+		LOG.info("CLIENT_ID: " + clientId);
 
 		if (bootstrapServers == null) {
 			throw new NullPointerException("bootstrapServers must not be null");
 		}
 
-		if (events == null || events.length == 0) {
-			events = new String[1];
-			events[0] = "REGISTER";
-		}
-
+		LOG.info("BOOTSTRAP_SERVERS: " + bootstrapServers);
 		kafkaProducerProperties = KafkaProducerConfig.init(config);
 	}
 
