@@ -84,6 +84,14 @@
 
 	</dependencies>
 
+	<repositories>
+		<repository>
+			<id>github</id>
+			<name>GitHub Packages</name>
+			<url>https://maven.pkg.github.com/dywinarpython/keycloak-dto-subOne</url>
+		</repository>
+	</repositories>
+
 	<build>
 		<plugins>
 			<plugin>
