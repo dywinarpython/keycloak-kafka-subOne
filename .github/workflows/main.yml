@@ -8,7 +8,7 @@ on:
   workflow_dispatch: 
 
 permissions:
-  contents: read
+  contents: write  # Changed from read to write for dependency graph submission
   packages: read  
 
 jobs:
