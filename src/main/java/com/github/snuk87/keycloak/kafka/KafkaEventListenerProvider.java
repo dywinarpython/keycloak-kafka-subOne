@@ -67,10 +67,10 @@ public class KafkaEventListenerProvider implements EventListenerProvider {
 		mapper = new ObjectMapper();
 	}
 
-	private void produceEvent(String eventAsString, String topic)
+	private void produceEvent(String eventAsString, String key, String topic)
 			throws InterruptedException, ExecutionException, TimeoutException {
 		LOG.debug("Produce to topic: " + topic + " ...");
-		ProducerRecord<String, String> record = new ProducerRecord<>(topic, eventAsString);
+		ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, eventAsString);
 		Future<RecordMetadata> metaData = producer.send(record);
 		RecordMetadata recordMetadata = metaData.get(30, TimeUnit.SECONDS);
 		LOG.debug("Produced to topic: " + recordMetadata.topic());
@@ -79,31 +79,35 @@ public class KafkaEventListenerProvider implements EventListenerProvider {
 	@Override
 	public void onEvent(Event event) {
 		try {
-			if (event.getType().equals(EventType.IDENTITY_PROVIDER_FIRST_LOGIN)) {
-				RealmModel realm = keycloakSession.realms().getRealm(event.getRealmId());
-				UserModel user = keycloakSession.users().getUserById(realm, event.getUserId());
-				UserInfo userInfo = new UserInfo(user.getFirstName(), user.getLastName(), UUID.fromString(event.getUserId()), user.getEmail(), true);
-				produceEvent(mapper.writeValueAsString(userInfo), topicCreateUser);
-			} else if (event.getType().equals(EventType.REGISTER)) {
+			if (event.getType().equals(EventType.REGISTER)) {
 				Map<String, String> details = event.getDetails();
-				String firstName = details.get("first_name");
-				String lastName = details.get("last_name");
+				String firstName;
+				String lastName;
+				if(details.get("identity_provider") == null) {
+					firstName = details.get("first_name");
+					lastName = details.get("last_name");
+				} else {
+					RealmModel realm = keycloakSession.realms().getRealm(event.getRealmId());
+					UserModel user = keycloakSession.users().getUserById(realm, event.getUserId());
+					firstName = user.getFirstName();
+					lastName = user.getLastName();
+				}
 				String email = details.get("email");
 				String userId = event.getUserId();
 				UserInfo userInfo = new UserInfo(
-						firstName,
-						lastName,
-						UUID.fromString(userId),
-						email,
-						false
+							firstName,
+							lastName,
+							UUID.fromString(userId),
+							email,
+							false
 				);
-				produceEvent(mapper.writeValueAsString(userInfo), topicCreateUser);
+				produceEvent(mapper.writeValueAsString(userInfo), event.getUserId(), topicCreateUser);
 			} else if (event.getType().equals(EventType.VERIFY_EMAIL)) {
 				Map<String, String> details = event.getDetails();
 				String email = details.get("email");
-				produceEvent(mapper.writeValueAsString(email), topicVerifyEmail);
+				produceEvent(email, event.getUserId(), topicVerifyEmail);
 			} else if(events.contains(event.getType())){
-				produceEvent(mapper.writeValueAsString(event), topicCreateUser);
+				produceEvent(mapper.writeValueAsString(event), event.getUserId(), topicCreateUser);
 			}
 		} catch (JsonProcessingException | ExecutionException | TimeoutException e) {
 			LOG.error(e.getMessage(), e);
@@ -116,7 +120,7 @@ public class KafkaEventListenerProvider implements EventListenerProvider {
 	public void onEvent(AdminEvent event, boolean includeRepresentation) {
 		if (topicAdminEvents != null) {
 			try {
-				produceEvent(mapper.writeValueAsString(event), topicAdminEvents);
+				produceEvent(mapper.writeValueAsString(event), null, topicAdminEvents);
 			} catch (JsonProcessingException | ExecutionException | TimeoutException e) {
 				LOG.error(e.getMessage(), e);
 			} catch (InterruptedException e) {

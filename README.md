@@ -6,13 +6,12 @@ The project is a modification of the original [Keycloak Kafka Event Listener](ht
 
 - Added support for the following Keycloak events:
 - User registration (`REGISTER`)
-- First login via an identification provider (`IDENTITY_PROVIDER_FIRST_LOGIN`)
 - Email confirmation (`VERIFY_EMAIL`)
 - Added custom Kafka topics:
 - `CREATE_USER_TOPIC` — User creation events
-  - `VERIFY_EMAIL_TOPIC` — email confirmation events
+- `VERIFY_EMAIL_TOPIC` — email confirmation events
 - Implemented the Kafka producer via the `KafkaProducerFactory` with configuration support from environment variables.
-- Added a new dependency for sending 'userInfo` objects to Kafka.
+- Added a new dependency for sending `userInfo` objects to Kafka.
 - Added unit tests to verify the operation of the event listener with the mock producer.
 
 ## Configuration
@@ -34,12 +33,11 @@ mvn clean package
 ## Изменения и улучшения
 
 - Добавлена поддержка следующих событий Keycloak:
-  - Регистрация пользователя (`REGISTER`)
-  - Первый вход через провайдера идентификации (`IDENTITY_PROVIDER_FIRST_LOGIN`)
-  - Подтверждение email (`VERIFY_EMAIL`)
+    - Регистрация пользователя (`REGISTER`)
+    - Подтверждение email (`VERIFY_EMAIL`)
 - Добавлены пользовательские топики Kafka:
-  - `CREATE_USER_TOPIC`  — события создания пользователя
-  - `VERIFY_EMAIL_TOPIC` — события подтверждения email
+    - `CREATE_USER_TOPIC`  — события создания пользователя
+    - `VERIFY_EMAIL_TOPIC` — события подтверждения email
 - Реализован продюсер Kafka через `KafkaProducerFactory` с поддержкой конфигурации из переменных окружения.
 - Добавлен новая зависмость для отправки объектов `UserInfo` в Kafka.
 - Добавлены юнит-тесты для проверки работы слушателя событий с мок-продюсером.
