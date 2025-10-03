@@ -19,7 +19,7 @@ The project is a modification of the original [Keycloak Kafka Event Listener](ht
 
 New environment variables for connecting to Kafka:
 
-- `KAFKA_CREATE_USER_TOPIC' — topic for creating a user
+- `KAFKA_CREATE_USER_TOPIC` — topic for creating a user
 - `KAF_KA_VERIFY_EMAIL_TOPIC` — topic for email confirmation
 
 ## Build and launch
@@ -38,7 +38,7 @@ mvn clean package
   - Первый вход через провайдера идентификации (`IDENTITY_PROVIDER_FIRST_LOGIN`)
   - Подтверждение email (`VERIFY_EMAIL`)
 - Добавлены пользовательские топики Kafka:
-  - `CREATE_USER_TOPIC` — события создания пользователя
+  - `CREATE_USER_TOPIC`  — события создания пользователя
   - `VERIFY_EMAIL_TOPIC` — события подтверждения email
 - Реализован продюсер Kafka через `KafkaProducerFactory` с поддержкой конфигурации из переменных окружения.
 - Добавлен новая зависмость для отправки объектов `UserInfo` в Kafka.
