@@ -20,7 +20,7 @@ The project is a modification of the original [Keycloak Kafka Event Listener](ht
 New environment variables for connecting to Kafka:
 
 - `KAFKA_CREATE_USER_TOPIC` — topic for creating a user
-- `KAF_KA_VERIFY_EMAIL_TOPIC` — topic for email confirmation
+- `KAFKA_VERIFY_EMAIL_TOPIC` — topic for email confirmation
 
 ## Build and launch
 
