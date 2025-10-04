@@ -29,7 +29,7 @@ public class KafkaEventListenerProviderFactory implements EventListenerProviderF
 	public EventListenerProvider create(KeycloakSession session) {
 		if (instance == null) {
 			instance = new KafkaEventListenerProvider(bootstrapServers, clientId, topicEvents, events, topicAdminEvents,
-					kafkaProducerProperties, new KafkaStandardProducerFactory(), session, topicCreateUser, topicVerifyEmail);
+					kafkaProducerProperties, new KafkaStandardProducerImpl(), session, topicCreateUser, topicVerifyEmail);
 		}
 		return instance;
 	}
@@ -84,7 +84,7 @@ public class KafkaEventListenerProviderFactory implements EventListenerProviderF
 		}
 
 		LOG.info("BOOTSTRAP_SERVERS: " + bootstrapServers);
-		kafkaProducerProperties = KafkaProducerConfig.init(config);
+		kafkaProducerProperties = KafkaProducerConfig.initProducer(config);
 	}
 
 	@Override
