@@ -1,10 +1,11 @@
-package com.github.snuk87.keycloak.kafka;
+package com.github.snuk87.keycloak.kafka.consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.Map;
 
+import com.github.snuk87.keycloak.kafka.KafkaConsumerConfig;
 import org.junit.jupiter.api.Test;
 import org.keycloak.Config.SystemPropertiesConfigProvider;
 

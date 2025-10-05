@@ -3,6 +3,8 @@ package com.github.snuk87.keycloak.kafka;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.jboss.logging.Logger;
 import org.keycloak.models.KeycloakSession;
@@ -12,6 +14,7 @@ import org.keycloak.models.RealmModel;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class UserDeletionConsumer implements Runnable {
@@ -41,6 +44,7 @@ public class UserDeletionConsumer implements Runnable {
         LOG.info("UserDeletionConsumer started successfully");
         try {
             consumer.subscribe(Collections.singletonList(deleteUserTopic));
+
             while (running) {
                 try {
                     ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000L));
@@ -52,13 +56,23 @@ public class UserDeletionConsumer implements Runnable {
                     LOG.infof("Received %d message(s) from topic '%s'", records.count(), deleteUserTopic);
 
                     for (ConsumerRecord<String, String> record : records) {
-                        String userId = record.value();
-                        LOG.infof("Processing user deletion: userId='%s', partition=%d, offset=%d",
-                                userId, record.partition(), record.offset());
-                        deleteUser(userId);
+                        boolean success = processRecord(record);
+
+                        if (success) {
+                            Map<TopicPartition, OffsetAndMetadata> offsetsToCommit = new HashMap<>();
+                            offsetsToCommit.put(
+                                    new TopicPartition(record.topic(), record.partition()),
+                                    new OffsetAndMetadata(record.offset() + 1)
+                            );
+                            consumer.commitSync(offsetsToCommit);
+                            LOG.debugf("Committed offset for partition=%d, offset=%d",
+                                    record.partition(), record.offset());
+                        } else {
+                            LOG.errorf("Failed to process message, will retry: partition=%d, offset=%d",
+                                    record.partition(), record.offset());
+                        }
                     }
-                    consumer.commitSync();
-                    LOG.debug("Offset committed successfully");
+
                 } catch (WakeupException e) {
                     LOG.info("Wakeup called, exiting consumer loop");
                     break;
@@ -76,6 +90,22 @@ public class UserDeletionConsumer implements Runnable {
         }
     }
 
+    private boolean processRecord(ConsumerRecord<String, String> record) {
+        String userId = record.value();
+
+        LOG.infof("Processing user deletion: userId='%s', partition=%d, offset=%d",
+                userId, record.partition(), record.offset());
+
+        try {
+            deleteUser(userId);
+            return true;
+        } catch (Exception e) {
+            LOG.errorf(e, "Error processing record: userId='%s'", userId);
+            return false;
+        }
+    }
+
+
     private void deleteUser(String userId) {
         if (userId == null || userId.trim().isEmpty()) {
             LOG.warn("Received null or empty userId, skipping deletion");
@@ -90,15 +120,15 @@ public class UserDeletionConsumer implements Runnable {
                 session.getTransactionManager().rollback();
                 return;
             }
+            session.getContext().setRealm(realm);
             UserModel user = session.users().getUserById(realm, userId);
             if (user != null) {
                 String username = user.getUsername();
-                String email = user.getEmail();
 
                 boolean deleted = session.users().removeUser(realm, user);
                 if (deleted) {
-                    LOG.infof("✓ User successfully deleted: userId='%s', username='%s', email='%s'",
-                            userId, username, email);
+                    LOG.infof("✓ User successfully deleted: userId='%s', username='%s'",
+                            userId, username);
                 } else {
                     LOG.errorf("✗ Failed to delete user: userId='%s', username='%s'", userId, username);
                 }

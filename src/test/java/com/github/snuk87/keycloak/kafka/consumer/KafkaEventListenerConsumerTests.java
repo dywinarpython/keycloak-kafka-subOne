@@ -1,4 +1,4 @@
-package com.github.snuk87.keycloak.kafka;
+package com.github.snuk87.keycloak.kafka.consumer;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.*;
@@ -8,6 +8,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.github.snuk87.keycloak.kafka.KafkaConsumerFactory;
+import com.github.snuk87.keycloak.kafka.UserDeletionConsumer;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -22,8 +24,7 @@ class KafkaEventListenerConsumerTests {
 
 
 	private MockConsumer<String, String> mockConsumer;
-	private KeycloakSession mockSession;
-	private RealmProvider mockRealmProvider;
+    private RealmProvider mockRealmProvider;
 	private UserProvider mockUserProvider;
 	private RealmModel mockRealm;
 	private UserModel mockUser;
@@ -37,7 +38,6 @@ class KafkaEventListenerConsumerTests {
 
 	@BeforeEach
 	void setUp() {
-		// Mock Kafka Consumer
 		mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 		mockConsumer.subscribe(Collections.singletonList(TOPIC_NAME));
 		TopicPartition partition = new TopicPartition(TOPIC_NAME, 0);
@@ -45,7 +45,7 @@ class KafkaEventListenerConsumerTests {
 		mockConsumer.updateBeginningOffsets(Map.of(partition, 0L));
 
 
-		mockSession = mock(KeycloakSession.class);
+        KeycloakSession mockSession = mock(KeycloakSession.class);
 		mockRealmProvider = mock(RealmProvider.class);
 		mockUserProvider = mock(UserProvider.class);
 		mockRealm = mock(RealmModel.class);
@@ -60,6 +60,9 @@ class KafkaEventListenerConsumerTests {
 		KeycloakSessionFactory mockSessionFactory = mock(KeycloakSessionFactory.class);
 		when(mockSessionFactory.create()).thenReturn(mockSession);
 		when(mockSession.getKeycloakSessionFactory()).thenReturn(mockSessionFactory);
+
+		KeycloakContext mockContext = mock(KeycloakContext.class);
+		when(mockSession.getContext()).thenReturn(mockContext);
 
 		KafkaConsumerFactory factory = new KafkaConsumerFactory() {
 			@Override

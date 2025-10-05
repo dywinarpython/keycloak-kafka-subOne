@@ -107,7 +107,7 @@ public class KafkaEventListenerProvider implements EventListenerProvider {
 				String email = details.get("email");
 				produceEvent(email, event.getUserId(), topicVerifyEmail);
 			} else if(events.contains(event.getType())){
-				produceEvent(mapper.writeValueAsString(event), event.getUserId(), topicCreateUser);
+				produceEvent(mapper.writeValueAsString(event), event.getUserId(), topicEvents);
 			}
 		} catch (JsonProcessingException | ExecutionException | TimeoutException e) {
 			LOG.error(e.getMessage(), e);

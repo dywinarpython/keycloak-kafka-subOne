@@ -19,22 +19,13 @@ public class KafkaEventListenerConsumerFactory implements EventListenerProviderF
 	private String topicDeleteUser;
 	private Map<String, Object> kafkaConsumerProperties;
 
-	private UserDeletionConsumer consumer;
+	private volatile UserDeletionConsumer consumer;
 	private Thread consumerThread;
+	private final Object lock = new Object();
 
 	@Override
 	public EventListenerProvider create(KeycloakSession session) {
-		LOG.info("Creating new UserDeletionConsumer for session");
-		UserDeletionConsumer newConsumer = new UserDeletionConsumer(
-				consumerFactory,
-				"keycloak-user-deletion-consumer-" + System.currentTimeMillis(),
-				bootstrapServers,
-				kafkaConsumerProperties,
-				session.getKeycloakSessionFactory(),
-				realmName,
-				topicDeleteUser
-		);
-		return new UserDeletionEventListenerProvider(newConsumer);
+		return new UserDeletionEventListenerProvider();
 	}
 
 	@Override
@@ -76,47 +67,85 @@ public class KafkaEventListenerConsumerFactory implements EventListenerProviderF
 
 	@Override
 	public void postInit(KeycloakSessionFactory factory) {
-		LOG.info("Starting UserDeletionConsumer thread...");
-
 		if (consumer == null) {
-			consumer = new UserDeletionConsumer(
-					consumerFactory,
-					"keycloak-user-deletion-consumer-" + System.currentTimeMillis(),
-					bootstrapServers,
-					kafkaConsumerProperties,
-					factory,
-					realmName,
-					topicDeleteUser
-			);
-			consumerThread = new Thread(consumer, "UserDeletionConsumer-Thread");
-			consumerThread.setDaemon(true);
-			consumerThread.start();
-			LOG.info("UserDeletionConsumer thread started successfully");
-		} else {
-			LOG.warn("Consumer already initialized, skipping thread start");
+			synchronized (lock) {
+				if (consumer == null) {
+					LOG.info("Starting SINGLETON UserDeletionConsumer thread...");
+					try {
+						consumer = new UserDeletionConsumer(
+								consumerFactory,
+								"keycloak-user-deletion-consumer-" + System.currentTimeMillis(),
+								bootstrapServers,
+								kafkaConsumerProperties,
+								factory,
+								realmName,
+								topicDeleteUser
+						);
+
+						consumerThread = new Thread(consumer, "UserDeletionConsumer-Thread");
+
+						consumerThread.setDaemon(false);
+
+						consumerThread.setUncaughtExceptionHandler((t, e) ->
+							LOG.error("Uncaught exception in UserDeletionConsumer thread", e)
+						);
+
+						consumerThread.start();
+
+						LOG.info("✓ SINGLETON UserDeletionConsumer thread started successfully");
+					} catch (Exception e) {
+						LOG.error("Failed to start UserDeletionConsumer", e);
+						consumer = null;
+						consumerThread = null;
+						throw new RuntimeException("Cannot initialize Kafka consumer", e);
+					}
+				} else {
+					LOG.warn("Consumer already initialized, skipping thread start");
+				}
+			}
 		}
 	}
 
 	@Override
 	public void close() {
-		LOG.info("Shutting down UserDeletionConsumer...");
+		LOG.info("Shutting down KafkaEventListenerConsumerFactory...");
 
 		if (consumer != null) {
-			consumer.stop();
-			if (consumerThread != null) {
-				try {
-					consumerThread.join(5000);
-					if (consumerThread.isAlive()) {
-						LOG.warn("Consumer thread did not stop in time, interrupting...");
-						consumerThread.interrupt();
-					} else {
-						LOG.info("Consumer thread stopped successfully");
+			synchronized (lock) {
+				if (consumer != null) {
+					LOG.info("Stopping UserDeletionConsumer...");
+
+					try {
+						consumer.stop();
+
+						if (consumerThread != null && consumerThread.isAlive()) {
+							LOG.info("Waiting for consumer thread to finish...");
+							consumerThread.join(10000);
+							if (consumerThread.isAlive()) {
+								LOG.warn("Consumer thread did not stop in time, interrupting...");
+								consumerThread.interrupt();
+
+								consumerThread.join(2000);
+								if (consumerThread.isAlive()) {
+									LOG.error("Consumer thread still alive after interrupt!");
+								} else {
+									LOG.info("Consumer thread stopped after interrupt");
+								}
+							} else {
+								LOG.info("✓ Consumer thread stopped gracefully");
+							}
+						}
+					} catch (InterruptedException e) {
+						LOG.warn("Interrupted while waiting for consumer to stop", e);
+						Thread.currentThread().interrupt();
+					} finally {
+						consumer = null;
+						consumerThread = null;
 					}
-				} catch (InterruptedException e) {
-					LOG.warn("Interrupted while waiting for consumer to stop", e);
-					Thread.currentThread().interrupt();
 				}
 			}
 		}
+
+		LOG.info("KafkaEventListenerConsumerFactory shutdown complete");
 	}
 }

@@ -1,5 +1,6 @@
-package com.github.snuk87.keycloak.kafka;
+package com.github.snuk87.keycloak.kafka.consumer;
 
+import com.github.snuk87.keycloak.kafka.KafkaConsumerFactory;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -12,6 +13,6 @@ class KafkaMockConsumerFactory implements KafkaConsumerFactory {
 	public <K, V> Consumer<K, V> createConsumer(String clientId,
 												String bootstrapServer,
 												Map<String, Object> optionalProperties) {
-		return new MockConsumer<K, V>(OffsetResetStrategy.EARLIEST);
+		return new MockConsumer<>(OffsetResetStrategy.EARLIEST);
 	}
 }
